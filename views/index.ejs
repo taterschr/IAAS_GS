@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IAAS RRADS Ground Station</title>
+    <link href="/css/site.css" rel="stylesheet" type="text/css"/>
+    <style>
+        body { font: 13px Helvetica, Arial; }
+        form { background: #fff; padding: 3px; position: fixed; bottom: 0; width: 100%; border-color: #000; border-top-style: solid; border-top-width: 1px;}
+        form input { border-style: solid; border-width: 1px; padding: 10px; width: 85%; margin-right: .5%; }
+        form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; margin-left: 2%; }
+        #messages { list-style-type: none; overflow-y: scroll; margin: 0; position: relative; padding: 0; left: 0; width: 400px; height: 600px; top: 50px; margin-top: 50px; border: 3px solid #8f8f8f;}
+        #messages li { padding: 5px 10px; }
+        #messages li:nth-child(odd) { background: #eee; }
+    </style>
+    <script src="../../socket.io/socket.io.js"></script>
+    <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+    <script type="text/javascript" src="smoothie.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDOP20tQGeMyKGtFJoS_wsVr5kOCCuj8Qo&callback=initMap&libraries=&v=weekly" async></script>
+
+  </head>
+
+
+  <body>
+    <div class="header">
+      <a href="/" class="logo">RRADS</a>
+      <div class="header-right">
+        <a class="active" href="#home">Home</a>
+        <!-- <a href="#contact">Contact</a>
+        <a href="#about">About</a> -->
+      </div>
+      <div class="header-center">
+          <b id="RAW">RAW</b>
+          <b id="GPS">GPS</b>
+          <b id="PTU">PTU</b>
+          <b id="PME">PME</b>
+          <b id="BAT">BAT</b>
+          <b id="ERR">ERR</b>
+          <b id="INF">INF</b>
+
+          <b id="plID"></b>
+
+      </div>
+    </div>
+    <div class="mapsOrganizer">
+      <a id="latlng" class="latLngDisplay">0.0</a>
+      <b id="map"></b>
+      <a>
+        <c><input type="checkbox" id="autoCenter" name="autoCenter" value=" ">
+          <label for="autoCenter"> Auto Map Center</label></c>
+        <c><input type="checkbox" id="satMap" name="satMap" value=" " onclick="changeMapType()">
+          <label for="satMap"> Imagery Map</label></c>
+        <c id="temp">xmap commands</c>
+      </a>
+    </div>
+
+    <div id="dtPanel1" class="dataPanel">
+        <a class="header">Positioning and Weather</a>
+        <a id="plAlt"><b>GPS Alt (m): </b>0.0</a>
+        <a id="plPressAlt"><b>Pres. Alt (m): </b>0.0</a>
+        <a id="plSats"><b>GPS Sats: </b>0.0</a>
+        <a id="plPriTemp"><b>PRI Temp (c): </b>0.0</a>
+        <a id="plSecTemp"><b>SEC Temp (c): </b>0.0</a>
+        <a id="plRH"><b>RH %: </b>0.0</a>
+        <a id="plLightVal"><b>LT Sens: </b>0.0</a>
+        <a id="plPress"><b>PRESS (mbar): </b>0.0</a>
+
+    </div>
+    <div id="dtPanel2" class="dataPanel">
+        <a class="header">Particulate Matter</a>
+        <a id="plTypPart"><b>Typ. Part Size: </b>0.0</a>
+        <a id="plPM10"><c>Mass Concentration<br><strong>0.3-1.0um</strong> Part. Size</c>0.0</a>
+        <a id="plPM25"><c>Mass Concentration<br><strong>0.3-2.5um</strong> Part. Size</c>0.0</a>
+        <a id="plPM40"><c>Mass Concentration<br><strong>0.3-4.0um</strong> Part. Size</c>0.0</a>
+        <a id="plPM100"><c>Mass Concentration<br><strong>0.3-10.0um</strong> Part. Size</c>0.0</a>
+        <a id="plNC05"><c>Number Concentration<br><strong>0.3-0.5um</strong> / cu. cm</c>0.0</a>
+        <a id="plNC10"><c>Number Concentration<br><strong>0.3-1.0um</strong> / cu. cm</c>0.0</a>
+        <a id="plNC25"><c>Number Concentration<br><strong>0.3-2.5um</strong> / cu. cm</c>0.0</a>
+        <a id="plNC40"><c>Number Concentration<br><strong>0.3-4.0um</strong> / cu. cm</c>0.0</a>
+        <a id="plNC100"><c>Number Concentration<br><strong>0.3-10.0um</strong> / cu. cm</c>0.0</a>
+
+    </div>
+    <div id="dtPanel3" class="dataPanel">
+        <a class="header">Status</a>
+        <a id="plCell1"><b>Cell 1 V: </b>0.0</a>
+        <a id="plCell2"><b>Cell 2 V: </b>0.0</a>
+        <a id="plPwrSrc"><b>Power SRC: </b>_</a>
+        <a id="plBattFan"><b>Batt. Fan: </b>_</a>
+        <a id="plBattTemp"><b>Batt Temp.: </b>0.0</a>
+        <a id="plRptState"><b>Repeater: </b>_</a>
+        <a><d id="plCh1">Main</d><d id="plCh2">Repeater</d><d id="plCh3">Camera</d></a>
+        <a>0.0</a>
+    </div>
+
+<!--
+    <div id="latlng" class="latLngDisplay">0.0</div>
+    <div id="mapControl" class="mapControls">
+      <a><input type="checkbox" id="autoCenter" name="autoCenter" value=" ">
+        <label for="autoCenter"> Auto Map Center</label></a>
+      <a><input type="checkbox" id="satMap" name="satMap" value=" " onclick="changeMapType()">
+          <label for="satMap"> Imagery Map</label></a>
+      <a id="temp">xmap commands</a>
+
+    </div> -->
+    <div id="graphsOrganizer1" class="graphsOrganizer">
+      <a>ALTITUDE<br><b id="altPlot"><canvas id="cnv1" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot2"><canvas id="cnv2" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot3"><canvas id="cnv3" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot4"><canvas id="cnv4" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot5"><canvas id="cnv5" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot6"><canvas id="cnv6" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot7"><canvas id="cnv7" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot8"><canvas id="cnv8" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot9"><canvas id="cnv9" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot10"><canvas id="cnv10" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot11"><canvas id="cnv11" width="300" height="225"></canvas></b></a>
+      <a>UNNAMED<br><b id="plot12"><canvas id="cnv12" width="300" height="225"></canvas></b></a>
+    </div>
+
+
+    <div id="messages"></div>
+  </body>
+
+  <script>
+    var altChart = new SmoothieChart({millisPerPixel:100,timestampFormatter:SmoothieChart.timeFormatter,interpolation:'linear'}),
+        plt2Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt3Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt4Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt5Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt6Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt7Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt8Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt9Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt10Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt11Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33}),
+        plt12Chart = new SmoothieChart({millisPerPixel:100,maxValueScale:1.33});
+
+    var altPlot = new TimeSeries(),
+        plt2 = new TimeSeries(),
+        plt3 = new TimeSeries(),
+        plt4 = new TimeSeries(),
+        plt5 = new TimeSeries(),
+        plt6 = new TimeSeries(),
+        plt7 = new TimeSeries(),
+        plt8 = new TimeSeries(),
+        plt9 = new TimeSeries(),
+        plt10 = new TimeSeries(),
+        plt11 = new TimeSeries(),
+        plt12 = new TimeSeries();
+
+    altChart.addTimeSeries(altPlot, {lineWidth:2,strokeStyle:'#00ff00'});
+    altChart.streamTo(document.getElementById("cnv1"));
+    plt2Chart.addTimeSeries(plt2, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt2Chart.streamTo(document.getElementById("cnv2"));
+    plt3Chart.addTimeSeries(plt3, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt3Chart.streamTo(document.getElementById("cnv3"));
+    plt4Chart.addTimeSeries(plt4, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt4Chart.streamTo(document.getElementById("cnv4"));
+    plt5Chart.addTimeSeries(plt5, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt5Chart.streamTo(document.getElementById("cnv5"));
+    plt6Chart.addTimeSeries(plt6, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt6Chart.streamTo(document.getElementById("cnv6"));
+
+    plt7Chart.addTimeSeries(plt7, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt7Chart.streamTo(document.getElementById("cnv7"));
+    plt8Chart.addTimeSeries(plt8, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt8Chart.streamTo(document.getElementById("cnv8"));
+    plt9Chart.addTimeSeries(plt9, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt9Chart.streamTo(document.getElementById("cnv9"));
+    plt10Chart.addTimeSeries(plt10, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt10Chart.streamTo(document.getElementById("cnv10"));
+    plt11Chart.addTimeSeries(plt11, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt11Chart.streamTo(document.getElementById("cnv11"));
+    plt12Chart.addTimeSeries(plt12, {lineWidth:2,strokeStyle:'#00ff00'});
+    plt12Chart.streamTo(document.getElementById("cnv12"));
+
+
+  </script>
+  <script>
+    let map;
+    let pos;
+    let poly;
+    var path = [];
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 39.642, lng: -103.179 },
+        zoom: 13,
+      });
+      pos = new google.maps.Marker({
+        position: {lat:39.5, lng:-103.25},
+        map,
+        title: "pos"
+      });
+      poly = new google.maps.Polyline({
+          map: map,
+          path: [],
+          geodesic: true,
+          strokeColor: "#0062ff",
+          strokeOpacity: 1.0,
+          strokeWeight: 2,
+      });
+      pos.setMap(map);
+
+    }
+    function changeMapType(){
+      if(document.getElementById("satMap").checked){
+          map.setMapTypeId('satellite');
+      } else {
+          map.setMapTypeId('roadmap');
+      }
+    }
+  </script>
+  <script>
+    var socket = io.connect('http://localhost:8080');
+    socket.on('GPS', function(data){
+        //$('#messages').append($('<li>').html(data));
+        document.getElementById("GPS").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("GPS").style.color = "#000000";}, 100);
+
+        document.getElementById("plID").innerHTML = data[0];
+
+        document.getElementById("plAlt").innerHTML = "<b>GPS Alt (m): </b>" + data[4];
+        document.getElementById("plSats").innerHTML = "<b>Sats:</b>" + data[5];
+
+        //update data for plots
+        altPlot.append(new Date().getTime(), parseFloat(data[4]));
+
+
+        path.push({lat:parseFloat(data[2]), lng:parseFloat(data[3])});
+        poly.setPath(path);
+
+        document.getElementById("latlng").innerHTML = data[2] + ", " + data[3];
+        pos.setPosition(new google.maps.LatLng(parseFloat(data[2]), parseFloat(data[3])));
+        if (document.getElementById("autoCenter").checked){
+            map.setCenter(new google.maps.LatLng(parseFloat(data[2]), parseFloat(data[3])));
+        }
+
+
+    });
+
+    socket.on('PTU', function(data){
+        //$('#messages').append($('<li>').html(data));
+        document.getElementById("PTU").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("PTU").style.color = "#000000";}, 100);
+
+        document.getElementById("plPress").innerHTML = "<b>PRESS (mbar): </b>" + data[2];
+        document.getElementById("plSecTemp").innerHTML = "<b>SEC Temp (c):</b>" + data[3];
+        document.getElementById("plPressAlt").innerHTML = "<b>Pres. Alt (m): </b>" + data[4];
+        document.getElementById("plPriTemp").innerHTML = "<b>PRI Temp (c): </b>" + data[5];
+        document.getElementById("plRH").innerHTML = "<b>RH %: </b>" + data[6];
+
+
+        document.getElementById("plID").innerHTML = data[0];
+        //parsing data
+
+
+
+
+
+    });
+
+    socket.on('PME', function(data){
+        //$('#messages').append($('<li>').html(data));
+        document.getElementById("PME").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("PME").style.color = "#000000";}, 100);
+
+        document.getElementById("plTypPart").innerHTML = "<b>Typ. Part Size: </b>" + data[11];
+        document.getElementById("plPM10").innerHTML = "<c>Mass Concentration<br><strong>0.3-1.0um</strong> Part. Size</c>" + data[2];
+        document.getElementById("plPM25").innerHTML = "<c>Mass Concentration<br><strong>0.3-2.5um</strong> Part. Size</c>" + data[3];
+        document.getElementById("plPM40").innerHTML = "<c>Mass Concentration<br><strong>0.3-4.0um</strong> Part. Size</c>" + data[4];
+        document.getElementById("plPM100").innerHTML = "<c>Mass Concentration<br><strong>0.3-10.0um</strong> Part. Size</c>" + data[5];
+        document.getElementById("plNC05").innerHTML = "<c>Number Concentration<br><strong>0.3-0.5um</strong> / cu. cm</c>" + data[6];
+        document.getElementById("plNC10").innerHTML = "<c>Number Concentration<br><strong>0.3-1.0um</strong> / cu. cm</c>" + data[7];
+        document.getElementById("plNC25").innerHTML = "<c>Number Concentration<br><strong>0.3-2.5um</strong> / cu. cm</c>" + data[8];
+        document.getElementById("plNC40").innerHTML = "<c>Number Concentration<br><strong>0.3-4.0um</strong> / cu. cm</c>" + data[9];
+        document.getElementById("plNC100").innerHTML = "<c>Number Concentration<br><strong>0.3-10.0um</strong> / cu. cm</c>" + data[10];
+
+
+        document.getElementById("plID").innerHTML = data[0];
+    });
+
+    socket.on('BAT', function(data){
+        //$('#messages').append($('<li>').html(data));
+        document.getElementById("BAT").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("BAT").style.color = "#000000";}, 100);
+
+        document.getElementById("plCell1").innerHTML = "<b>Cell 1 V: </b>" + data[2];
+        document.getElementById("plCell2").innerHTML = "<b>Cell 2 V: </b>" + data[3];
+        if (data[4] == '1'){
+          document.getElementById("plPwrSrc").innerHTML = "<b>Power SRC: </b>" + "AUX";
+        } else {
+          document.getElementById("plPwrSrc").innerHTML = "<b>Power SRC: </b>" + "BAT";
+        }
+        if (data[5] == '1'){
+          document.getElementById("plBattFan").innerHTML = "<b>Batt. Fan: </b>" + "ON";
+        } else {
+          document.getElementById("plBattFan").innerHTML = "<b>Batt. Fan: </b>" + "OFF";
+        }
+        document.getElementById("plBattTemp").innerHTML = "<b>Batt Temp: </b>" + data[6];
+        if (data[7] == '1'){
+          document.getElementById("plCh1").style.color = "#ff0000";
+        } else {
+          document.getElementById("plCh1").style.color = "#00f00";
+        }
+        if (data[8] == '1'){
+          document.getElementById("plCh2").style.color = "#ff0000";
+        } else {
+          document.getElementById("plCh2").style.color = "#00f00";
+        }
+        if (data[9] == '1'){
+          document.getElementById("plCh3").style.color = "#ff0000";
+        } else {
+          document.getElementById("plCh3").style.color = "#00f00";
+        }
+
+        document.getElementById("plID").innerHTML = data[0];
+    });
+
+    socket.on('ERR', function(data){
+        //$('#messages').append($('<li>').html(data));
+        document.getElementById("GPS").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("GPS").style.color = "#000000";}, 100);
+
+        document.getElementById("plID").innerHTML = data[0];
+    });
+
+    socket.on('INF', function(data){
+        //$('#messages').append($('<li>').html(data));
+        document.getElementById("GPS").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("GPS").style.color = "#000000";}, 100);
+
+        document.getElementById("plID").innerHTML = data[0];
+    });
+
+    socket.on('RAW', function(data){
+        $('#messages').append($('<li>').html(data));
+        document.getElementById("RAW").style.color = "#2ad921";
+        setTimeout(function(){document.getElementById("RAW").style.color = "#000000";}, 100);
+    });
+
+  </script>
+</html>
